@@ -1,0 +1,42 @@
+name: Public portfolio daily trust update
+
+on:
+  schedule:
+    - cron: "30 12 * * 1-5"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  trust-update:
+    runs-on: ubuntu-latest
+    environment: PRODUCTION
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Update model NAV
+        run: python update_public_nav.py
+        env: &trust-env
+          PUBLIC_BASKET_DATABASE_URL: ${{ secrets.PUBLIC_BASKET_DATABASE_URL }}
+          PUBLIC_PORTFOLIO_ENV: PRODUCTION
+          PUBLIC_BASKET_ID: PUBLIC-01
+          PUBLIC_PORTFOLIO_TIMEZONE: Asia/Kolkata
+          PUBLIC_PERFORMANCE_VERSION: performance-v1
+          PUBLIC_FORECAST_VERSION: forecast-v3-28calendar
+          PUBLIC_FORECAST_METHOD: historical-calendar-block-28d-v1
+          PUBLIC_CACHE_TTL_SECONDS: "300"
+          PUBLIC_REFRESH_POLICY: weekdays-after-market-close
+          PUBLIC_MODEL_BACKFILL_TRADING_DAYS: ${{ vars.PUBLIC_MODEL_BACKFILL_TRADING_DAYS || '0' }}
+      - name: Update accountable forecasts
+        run: python update_public_forecasts.py
+        env: *trust-env
+      - name: Verify production trust layer
+        run: python production_smoke_test.py
+        env: *trust-env
+
